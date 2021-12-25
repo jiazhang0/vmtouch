@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #define VMTOUCH_VERSION "1.3.1"
-#define RESIDENCY_CHART_WIDTH 60
+#define RESIDENCY_CHART_WIDTH 32
 #define CHART_UPDATE_INTERVAL 0.1
 #define MAX_CRAWL_DEPTH 1024
 #define MAX_NUMBER_OF_IGNORES 1024
@@ -439,35 +439,31 @@ double gettimeofday_as_double() {
 void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in_file) {
   int64_t pages_in_core=0;
   int64_t pages_per_char;
-  int64_t i,j=0,curr=0;
+  int64_t i,j=0;
 
-  if (pages_in_file <= RESIDENCY_CHART_WIDTH) pages_per_char = 1;
-  else pages_per_char = (pages_in_file / RESIDENCY_CHART_WIDTH) + 1;
-
-  fprintf(out, "\r[");
+  if (pages_in_file <= RESIDENCY_CHART_WIDTH) pages_per_char = pages_in_file;
+  else pages_per_char = RESIDENCY_CHART_WIDTH;
 
   for (i=0; i<pages_in_file; i++) {
+    if (!j)
+      fprintf(out, "\n[");
+
     if (is_mincore_page_resident(mincore_array[i])) {
-      curr++;
       pages_in_core++;
-    }
+      fprintf(out, "O");
+    } else
+      fprintf(out, " ");
+
     j++;
-    if (j == pages_per_char) {
-      if (curr == pages_per_char) fprintf(out, "O");
-      else if (curr == 0) fprintf(out, " ");
-      else fprintf(out, "o");
 
-      j = curr = 0;
+    if (j == pages_per_char) {
+      j = 0;
+      fprintf(out, "] #%" PRId64 " - #%" PRId64, i + 1 - pages_per_char, i);
     }
   }
 
-  if (j) {
-    if (curr == j) fprintf(out, "O");
-    else if (curr == 0) fprintf(out, " ");
-    else fprintf(out, "o");
-  }
-
-  fprintf(out, "] %" PRId64 "/%" PRId64, pages_in_core, pages_in_file);
+  if (j)
+    fprintf(out, "] #%" PRId64 " - #%" PRId64, i + 1 - pages_per_char, i);
 
   fflush(out);
 }
@@ -630,7 +626,6 @@ void vmtouch_file(char *path) {
       }
 #endif
       last_chart_print_time = gettimeofday_as_double();
-      print_page_residency_chart(stdout, mincore_array, pages_in_range);
     }
 
     if (o_touch) {
